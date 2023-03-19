@@ -1,0 +1,53 @@
+parameters
+  - name: LintInfrastructure
+    displayName: Run linting on all bicep code
+    type: boolean
+    default: true
+
+trigger: 
+  - master
+
+name: Deploy infrastructure from Bicep files
+
+variables: 
+  appName: 'fn-cloud-engineering-001'
+  vmImageName: 'ubuntu-latest'
+  azureServiceConnection: 'Service Connection for cloud engineering example'
+  resourceGroupName: 'example_ressource_group'
+  location: 'westeurope'
+  parameterFile: 'infrastructure/azuredeploy.parameters.json'
+  templateFile: 'infrastructure/main.bicep'
+pool:
+  vmImage: $(vmImageName)
+
+stages:
+  - {{ if eq(parameters.LintInfrastructure, true)}}:
+    - stage: LintAndValidate
+      displayName: Linting the bicep code
+      jobs: 
+        - job: LintAndValidateInfrastructure
+          displayName: Run Bicep linter and validation
+          steps:
+            - task: AzureCLI@2
+              name: LintInfrastructure
+              displayName: Linting Bicep code
+              inputs:
+                azureServiceSubscription: $(azureServiceConnection)
+                scriptType: bash
+                scriptLocation: 'inlineScript'
+                inlineScript: |
+                  az bicep build --file $(templateFile)
+
+              task: AzureResourceManagerTemplateDeployment@3
+              name: RunPreDeployValidation
+              displayName: Validating infrastructure before deploying
+              inputs:
+                azureServiceSubscription: $(azureServiceConnection)
+                location: $(location)
+                deploymentMode: Validation
+                resourceGroupName: $(resourceGroupName)
+                csmFile: $(templateFile)
+                csmParameterFile: $(parameterFile)
+
+
+                
